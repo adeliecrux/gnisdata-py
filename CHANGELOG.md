@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.0] - 2025-11-30
+## [0.2.1] - 2025-11-30
+
+### Added
+- GitHub Actions workflow for automated PyPI publishing on releases
+- Pull request checks workflow with comprehensive testing and validation
+- Flake8 badge to README
+- `.flake8` configuration file for linting standards
+
+### Changed
+- Version Bump
+
+## [0.2.0] - 2025-11-30
 
 ### Added
 - Initial release of gnisdata-py package
