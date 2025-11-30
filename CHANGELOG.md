@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2025-11-30
+
+### Changed
+- PyPI publishing workflow now triggers on multiple release event types (published, created, released, prereleased)
+
+### Fixed
+- Build and publish workflow now properly triggers on pre-releases
+
 ## [0.2.2] - 2025-11-30
 
 ### Changed
@@ -45,3 +53,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Code quality tools: black, flake8, isort
 - Poetry-based dependency management
 - MIT License
+
+[Unreleased]: https://github.com/adeliecrux/gnisdata-py/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/adeliecrux/gnisdata-py/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/adeliecrux/gnisdata-py/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/adeliecrux/gnisdata-py/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/adeliecrux/gnisdata-py/releases/tag/v0.2.0

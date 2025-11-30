@@ -1,8 +1,9 @@
 name: Build and Publish to PyPI
 
 on:
+  workflow_dispatch:
   release:
-    types: [created]
+    types: [published, created, released, prereleased]
 
 permissions:
   contents: read

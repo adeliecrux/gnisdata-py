@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "gnisdata"
-version = "0.2.2"
+version = "0.2.3"
 description = "A Python 3 utility to pull, view, and filter USGS GNIS data"
 authors = ["Chad Kahl <chad.m.kahl@gmail.com>"]
 license = "MIT"
