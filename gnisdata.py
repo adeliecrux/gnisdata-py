@@ -7,50 +7,104 @@ Information System (GNIS) data from the USGS into GeoPandas GeoDataFrames.
 
 import io
 import sys
+import tempfile
 import time
 import zipfile
-import tempfile
 from pathlib import Path
 from typing import Optional, Union
-import requests
+
 import geopandas as gpd
 import pandas as pd
-
+import requests
 
 # Constants
 BASE_URL = "https://prd-tnm.s3.amazonaws.com/StagedProducts/GeographicNames/FullModel/"
 ELEVATION_SERVICE_URL = "https://epqs.nationalmap.gov/v1/json"
 VALID_STATES = {
-    'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
-    'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
-    'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
-    'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
-    'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY',
-    'DC', 'AS', 'GU', 'MP', 'PR', 'VI', 'UM', 'DC'
+    "AL",
+    "AK",
+    "AZ",
+    "AR",
+    "CA",
+    "CO",
+    "CT",
+    "DE",
+    "FL",
+    "GA",
+    "HI",
+    "ID",
+    "IL",
+    "IN",
+    "IA",
+    "KS",
+    "KY",
+    "LA",
+    "ME",
+    "MD",
+    "MA",
+    "MI",
+    "MN",
+    "MS",
+    "MO",
+    "MT",
+    "NE",
+    "NV",
+    "NH",
+    "NJ",
+    "NM",
+    "NY",
+    "NC",
+    "ND",
+    "OH",
+    "OK",
+    "OR",
+    "PA",
+    "RI",
+    "SC",
+    "SD",
+    "TN",
+    "TX",
+    "UT",
+    "VT",
+    "VA",
+    "WA",
+    "WV",
+    "WI",
+    "WY",
+    "DC",
+    "AS",
+    "GU",
+    "MP",
+    "PR",
+    "VI",
+    "UM",
+    "DC",
 }
-VALID_ALL_LOCATIONS = {'NATIONAL', 'ALL', 'US', 'USA'}
+VALID_ALL_LOCATIONS = {"NATIONAL", "ALL", "US", "USA"}
 
 
 class GNISDataError(Exception):
     """Base exception for GNIS data operations."""
+
     pass
 
 
 def _construct_url(location: str) -> str:
     """
     Construct the download URL for a specific location.
-    
+
     Args:
-        location: Either a two-letter state code or one of 'National', 'All', 'US', 'USA' for all data.
-        
+        location: Either a two-letter state code or one of 'National',
+            'All', 'US', 'USA' for all data.
+
     Returns:
         The complete URL for downloading the data.
-        
+
     Raises:
         GNISDataError: If the location is invalid.
     """
     location = location.upper()
-    
+
     if location in VALID_ALL_LOCATIONS:
         filename = "Gazetteer_National_GPKG.zip"
     elif location in VALID_STATES:
@@ -59,43 +113,43 @@ def _construct_url(location: str) -> str:
         raise GNISDataError(
             f"Invalid location: {location}. Must be 'National' or a valid state code."
         )
-    
+
     return BASE_URL + filename
 
 
 def download_gnis_data(location: str = "National", chunk_size: int = 8192) -> bytes:
     """
     Download GNIS data from USGS for a specified location.
-    
+
     Args:
         location: Either 'National' for all US data or a two-letter state code
                  (e.g., 'CA', 'NY', 'TX'). Default is 'National'.
         chunk_size: Size of chunks to download in bytes. Default is 8192.
-        
+
     Returns:
         The downloaded ZIP file content as bytes.
-        
+
     Raises:
         GNISDataError: If download fails or location is invalid.
-        
+
     Examples:
         >>> data = download_gnis_data('CA')  # Download California data
         >>> data = download_gnis_data('National')  # Download all US data
     """
     url = _construct_url(location)
-    
+
     try:
         response = requests.get(url, stream=True, timeout=30)
         response.raise_for_status()
-        
+
         zip_content = io.BytesIO()
         for chunk in response.iter_content(chunk_size=chunk_size):
             if chunk:
                 zip_content.write(chunk)
-        
+
         zip_content.seek(0)
         return zip_content.getvalue()
-        
+
     except Exception as e:
         raise GNISDataError(f"Failed to download data for {location}: {e}")
 
@@ -103,35 +157,35 @@ def download_gnis_data(location: str = "National", chunk_size: int = 8192) -> by
 def extract_gpkg_from_zip(zip_data: bytes, location: str = "National") -> bytes:
     """
     Extract the .gpkg file from the ZIP archive.
-    
+
     Args:
         zip_data: The ZIP file content as bytes.
         location: The location identifier to construct the expected filename.
-                 
+
     Returns:
         The extracted .gpkg file content as bytes.
-        
+
     Raises:
         GNISDataError: If extraction fails or the expected file is not found.
     """
     location = location.upper()
-    
-    if location == 'NATIONAL':
+
+    if location == "NATIONAL":
         expected_filename = "Gazetteer_National_GPKG.gpkg"
     else:
         expected_filename = f"Gazetteer_{location}_GPKG.gpkg"
-    
+
     try:
         with zipfile.ZipFile(io.BytesIO(zip_data)) as zf:
             if expected_filename not in zf.namelist():
                 raise GNISDataError(
-                    f"Expected file '{expected_filename}' not found in archive. "
-                    f"Available files: {zf.namelist()}"
+                    f"Expected file '{expected_filename}' not found "
+                    f"in archive. Available files: {zf.namelist()}"
                 )
-            
+
             gpkg_content = zf.read(expected_filename)
             return gpkg_content
-            
+
     except zipfile.BadZipFile as e:
         raise GNISDataError(f"Invalid ZIP file: {e}")
 
@@ -140,16 +194,16 @@ def load_gnis_gdf(
     location: str = "National",
     layer: Optional[str] = None,
     use_cache: bool = False,
-    cache_dir: Optional[Union[str, Path]] = None
+    cache_dir: Optional[Union[str, Path]] = None,
 ) -> gpd.GeoDataFrame:
     """
     Download, extract, and load GNIS data into a GeoDataFrame.
-    
+
     This function handles the entire pipeline: downloading the ZIP file,
     extracting the GPKG, and loading it into a GeoDataFrame. When caching is
     enabled, the GPKG file is stored on disk for reuse across sessions and
     enables loading different layers without re-downloading.
-    
+
     Args:
         location: Either 'National' for all US data or a two-letter state code.
                  Default is 'National'.
@@ -158,34 +212,35 @@ def load_gnis_gdf(
         use_cache: If True, cache the GPKG file for reuse. Default is False.
         cache_dir: Directory to store cached files. If None, uses ~/.cache/gnisdata.
                   Only used when use_cache=True.
-                  
+
     Returns:
         A GeoDataFrame containing the GNIS geographic names data.
-        
+
     Raises:
         GNISDataError: If any step in the process fails.
-        
+
     Examples:
         >>> gdf = load_gnis_gdf('CA')  # Load California data
         >>> gdf = load_gnis_gdf('CA', use_cache=True)  # Cache for reuse
-        >>> gdf = load_gnis_gdf('CA', layer='DomesticNames', use_cache=True)  # Different layer from cache
+        >>> # Different layer from cache
+        >>> gdf = load_gnis_gdf('CA', layer='DomesticNames', use_cache=True)
     """
     location_upper = location.upper()
-    
+
     if location_upper in VALID_ALL_LOCATIONS:
         gpkg_filename = "Gazetteer_National_GPKG.gpkg"
     else:
         gpkg_filename = f"Gazetteer_{location_upper}_GPKG.gpkg"
-    
+
     if use_cache:
         if cache_dir is None:
-            cache_path = Path.home() / '.cache' / 'gnisdata'
+            cache_path = Path.home() / ".cache" / "gnisdata"
         else:
             cache_path = Path(cache_dir)
-        
+
         cache_path.mkdir(parents=True, exist_ok=True)
         gpkg_file = cache_path / gpkg_filename
-        
+
         if gpkg_file.exists():
             print(f"Using cached GPKG: {gpkg_file}")
             try:
@@ -197,39 +252,39 @@ def load_gnis_gdf(
                 return gdf
             except Exception as e:
                 print(f"Warning: Cached file corrupted, re-downloading... ({e})")
-                gpkg_file.unlink() 
-    
+                gpkg_file.unlink()
+
     print(f"Downloading GNIS data for {location}...")
     zip_data = download_gnis_data(location)
-    
+
     print("Extracting GPKG file...")
     gpkg_data = extract_gpkg_from_zip(zip_data, location)
-    
+
     if use_cache:
         print(f"Caching GPKG to {gpkg_file}...")
         gpkg_file.write_bytes(gpkg_data)
         file_to_read = gpkg_file
         cleanup_needed = False
     else:
-        tmp_file = tempfile.NamedTemporaryFile(suffix='.gpkg', delete=False)
+        tmp_file = tempfile.NamedTemporaryFile(suffix=".gpkg", delete=False)
         tmp_file.write(gpkg_data)
         tmp_file.close()
         file_to_read = Path(tmp_file.name)
         cleanup_needed = True
-    
+
     print("Loading data into GeoDataFrame...")
     try:
         if layer:
             gdf = gpd.read_file(file_to_read, layer=layer)
         else:
             gdf = gpd.read_file(file_to_read)
-        
+
         print(f"Successfully loaded {len(gdf)} features.")
         return gdf
-    
+
     except Exception as e:
         raise GNISDataError(f"Failed to load GPKG into GeoDataFrame: {e}")
-    
+
     finally:
         if cleanup_needed:
             file_to_read.unlink(missing_ok=True)
@@ -238,7 +293,7 @@ def load_gnis_gdf(
 def get_available_states() -> set:
     """
     Get the set of valid state codes that can be used.
-    
+
     Returns:
         A set of valid two-letter state codes.
     """
@@ -246,37 +301,36 @@ def get_available_states() -> set:
 
 
 def clear_cache(
-    location: Optional[str] = None,
-    cache_dir: Optional[Union[str, Path]] = None
+    location: Optional[str] = None, cache_dir: Optional[Union[str, Path]] = None
 ) -> None:
     """
     Clear cached GPKG files.
-    
+
     Args:
         location: If specified, only clear cache for this location.
                  If None, clear all cached files.
         cache_dir: Cache directory. If None, uses ~/.cache/gnisdata
-        
+
     Examples:
         >>> clear_cache('CA')  # Clear only California cache
         >>> clear_cache()  # Clear all cached files
     """
     if cache_dir is None:
-        cache_path = Path.home() / '.cache' / 'gnisdata'
+        cache_path = Path.home() / ".cache" / "gnisdata"
     else:
         cache_path = Path(cache_dir)
-    
+
     if not cache_path.exists():
         print("No cache directory found.")
         return
-    
+
     if location:
         location_upper = location.upper()
         if location_upper in VALID_ALL_LOCATIONS:
             filename = "Gazetteer_National_GPKG.gpkg"
         else:
             filename = f"Gazetteer_{location_upper}_GPKG.gpkg"
-        
+
         file_to_delete = cache_path / filename
         if file_to_delete.exists():
             file_to_delete.unlink()
@@ -297,16 +351,16 @@ def clear_cache(
 def get_cache_info(cache_dir: Optional[Union[str, Path]] = None) -> dict:
     """
     Get information about cached files.
-    
+
     Args:
         cache_dir: Cache directory. If None, uses ~/.cache/gnisdata
-    
+
     Returns:
         Dictionary with cache information including:
         - cache_dir: Path to cache directory
         - cached_files: List of cached files with size and modification time
         - total_size_mb: Total size of all cached files in megabytes
-        
+
     Examples:
         >>> info = get_cache_info()
         >>> print(f"Total cache size: {info['total_size_mb']:.2f} MB")
@@ -314,103 +368,97 @@ def get_cache_info(cache_dir: Optional[Union[str, Path]] = None) -> dict:
         ...     print(f"{file['filename']}: {file['size_mb']:.2f} MB")
     """
     if cache_dir is None:
-        cache_path = Path.home() / '.cache' / 'gnisdata'
+        cache_path = Path.home() / ".cache" / "gnisdata"
     else:
         cache_path = Path(cache_dir)
-    
+
     if not cache_path.exists():
-        return {
-            'cache_dir': str(cache_path),
-            'cached_files': [],
-            'total_size_mb': 0
-        }
-    
+        return {"cache_dir": str(cache_path), "cached_files": [], "total_size_mb": 0}
+
     cached_files = []
     total_size = 0
-    
+
     for gpkg in sorted(cache_path.glob("*.gpkg")):
         size = gpkg.stat().st_size
         total_size += size
-        cached_files.append({
-            'filename': gpkg.name,
-            'size_mb': size / (1024 * 1024),
-            'modified': gpkg.stat().st_mtime,
-            'path': str(gpkg)
-        })
-    
+        cached_files.append(
+            {
+                "filename": gpkg.name,
+                "size_mb": size / (1024 * 1024),
+                "modified": gpkg.stat().st_mtime,
+                "path": str(gpkg),
+            }
+        )
+
     return {
-        'cache_dir': str(cache_path),
-        'cached_files': cached_files,
-        'total_size_mb': total_size / (1024 * 1024)
+        "cache_dir": str(cache_path),
+        "cached_files": cached_files,
+        "total_size_mb": total_size / (1024 * 1024),
     }
 
 
 def get_elevation(latitude: float, longitude: float, units: str = "Feet") -> int:
     """
-    Get elevation for a specific latitude/longitude using the USGS Elevation Point Query Service.
-    
-    This function queries the USGS National Map Elevation Point Query Service (EPQS)
-    to retrieve elevation data for a given coordinate.
-    
+    Get elevation for a specific latitude/longitude using the USGS
+    Elevation Point Query Service.
+
+    This function queries the USGS National Map Elevation Point Query
+    Service (EPQS) to retrieve elevation data for a given coordinate.
+
     Args:
         latitude: Decimal latitude (e.g., 36.578581)
         longitude: Decimal longitude (e.g., -118.291994)
         units: Units for elevation. Either "Feet" or "Meters". Default is "Feet".
-        
+
     Returns:
         Elevation as an integer in the specified units.
-        
+
     Raises:
         GNISDataError: If the API request fails or returns invalid data.
         ValueError: If latitude/longitude are out of valid range or units are invalid.
-        
+
     Examples:
         >>> elevation = get_elevation(36.578581, -118.291994)  # Mount Whitney
         >>> print(f"Elevation: {elevation} feet")
         Elevation: 14505 feet
-        
+
         >>> elevation = get_elevation(36.578581, -118.291994, units="Meters")
         >>> print(f"Elevation: {elevation} meters")
         Elevation: 4421 meters
     """
     if not -90 <= latitude <= 90:
         raise ValueError(f"Latitude must be between -90 and 90, got {latitude}")
-    
+
     if not -180 <= longitude <= 180:
         raise ValueError(f"Longitude must be between -180 and 180, got {longitude}")
-    
+
     if units not in ("Feet", "Meters"):
         raise ValueError(f"Units must be 'Feet' or 'Meters', got {units}")
-    
-    params = {
-        'x': longitude,
-        'y': latitude,
-        'units': units,
-        'output': 'json'
-    }
-    
+
+    params = {"x": longitude, "y": latitude, "units": units, "output": "json"}
+
     try:
         response = requests.get(ELEVATION_SERVICE_URL, params=params, timeout=10)
         response.raise_for_status()
-        
+
         data = response.json()
-        
-        if 'value' not in data:
+
+        if "value" not in data:
             raise GNISDataError(
-                f"No elevation data returned for coordinates ({latitude}, {longitude}). "
-                f"Response: {data}"
+                f"No elevation data returned for coordinates "
+                f"({latitude}, {longitude}). Response: {data}"
             )
-        
-        elevation_value = data['value']
-        
+
+        elevation_value = data["value"]
+
         if elevation_value is None or elevation_value == -1000000:
             raise GNISDataError(
                 f"No elevation available for coordinates ({latitude}, {longitude}). "
                 "Location may be outside coverage area or over water."
             )
-        
+
         return int(round(elevation_value))
-        
+
     except GNISDataError:
         raise
     except requests.exceptions.RequestException as e:
@@ -428,11 +476,12 @@ def create_enriched_export(
     clear_cache_after: bool = True,
     add_elevation: bool = False,
     max_elevation_requests: Optional[int] = None,
-    output_file: Optional[str] = None
+    output_file: Optional[str] = None,
 ) -> pd.DataFrame:
     """
-    Create an enriched GNIS dataset by combining DomesticNames and FeatureDescriptionHistory layers.
-    
+    Create an enriched GNIS dataset by combining DomesticNames and
+    FeatureDescriptionHistory layers.
+
     This function performs the following workflow:
     1. Loads DomesticNames layer with caching enabled
     2. Filters by specified feature classes
@@ -441,149 +490,147 @@ def create_enriched_export(
     5. Combines description and history fields
     6. Optionally adds elevation data
     7. Optionally exports to pipe-delimited file
-    
+
     Args:
-        location: State code (e.g., 'CO') or 'National'/'All' for nationwide data
-        feature_classes: List of feature classes to include (e.g., ['summit', 'ridge', 'valley'])
-        cache_dir: Directory for caching GPKG files. Defaults to ~/.cache/gnisdata
-        clear_cache_after: Whether to clear the cache after completion. Defaults to True.
-        add_elevation: Whether to add elevation data from USGS EPQS API. Defaults to False.
-        max_elevation_requests: Maximum number of elevation API calls to make. Defaults to None (all records).
+        location: State code (e.g., 'CO') or 'National'/'All' for
+            nationwide data
+        feature_classes: List of feature classes to include
+            (e.g., ['summit', 'ridge', 'valley'])
+        cache_dir: Directory for caching GPKG files. Defaults to
+            ~/.cache/gnisdata
+        clear_cache_after: Whether to clear the cache after completion.
+            Defaults to True.
+        add_elevation: Whether to add elevation data from USGS EPQS API.
+            Defaults to False.
+        max_elevation_requests: Maximum number of elevation API calls to
+            make. Defaults to None (all records).
         output_file: Path to export pipe-delimited file. If None, no export occurs.
-        
+
     Returns:
         DataFrame with enriched GNIS data
-        
+
     Raises:
         GNISDataError: If layers cannot be loaded or required data is missing
-        
+
     Examples:
-        >>> # Basic usage - summit features in Colorado, no elevation, return DataFrame only
+        >>> # Basic usage - summit features in Colorado, no elevation
+        >>> # Returns DataFrame only
         >>> df = create_enriched_export('CO', ['Summit'])
-        
+
         >>> # Export to file with elevation for first 100 records
         >>> df = create_enriched_export(
-        ...     'CO', 
-        ...     ['Summit', 'Ridge'], 
+        ...     'CO',
+        ...     ['Summit', 'Ridge'],
         ...     add_elevation=True,
         ...     max_elevation_requests=100,
         ...     output_file='colorado_peaks.psv'
         ... )
-        
+
         >>> # Keep cache after completion
         >>> df = create_enriched_export(
-        ...     'CO', 
+        ...     'CO',
         ...     ['Summit'],
         ...     clear_cache_after=False
         ... )
     """
     domestic = load_gnis_gdf(
-        location=location,
-        layer='DomesticNames',
-        use_cache=True,
-        cache_dir=cache_dir
+        location=location, layer="DomesticNames", use_cache=True, cache_dir=cache_dir
     )
-    
-    domestic_filtered = domestic[domestic['feature_class'].isin(feature_classes)]
-    
+
+    domestic_filtered = domestic[domestic["feature_class"].isin(feature_classes)]
+
     if len(domestic_filtered) == 0:
         raise GNISDataError(
             f"No features found for classes {feature_classes} in {location}"
         )
-    
-    domestic_cols = domestic_filtered[[
-        'feature_id', 
-        'feature_name', 
-        'feature_class', 
-        'state_name', 
-        'county_name', 
-        'prim_lat_dec', 
-        'prim_long_dec'
-    ]]
-    
+
+    domestic_cols = domestic_filtered[
+        [
+            "feature_id",
+            "feature_name",
+            "feature_class",
+            "state_name",
+            "county_name",
+            "prim_lat_dec",
+            "prim_long_dec",
+        ]
+    ]
+
     try:
         history = load_gnis_gdf(
             location=location,
-            layer='FeatureDescriptionHistory',
+            layer="FeatureDescriptionHistory",
             use_cache=True,
-            cache_dir=cache_dir
+            cache_dir=cache_dir,
         )
     except Exception as e:
-        raise GNISDataError(
-            f"Failed to load FeatureDescriptionHistory layer: {e}"
-        )
-    
-    history_cols = history[['feature_id', 'description', 'history']]
-    
-    merged = domestic_cols.merge(
-        history_cols,
-        on='feature_id',
-        how='left'
+        raise GNISDataError(f"Failed to load FeatureDescriptionHistory layer: {e}")
+
+    history_cols = history[["feature_id", "description", "history"]]
+
+    merged = domestic_cols.merge(history_cols, on="feature_id", how="left")
+
+    merged["description"] = merged["description"].fillna("")
+    merged["history"] = merged["history"].fillna("")
+
+    merged = merged.rename(
+        columns={
+            "feature_name": "name",
+            "feature_class": "class",
+            "state_name": "state",
+            "county_name": "county",
+            "prim_lat_dec": "latitude",
+            "prim_long_dec": "longitude",
+        }
     )
-    
-    merged['description'] = merged['description'].fillna('')
-    merged['history'] = merged['history'].fillna('')
-    
-    merged = merged.rename(columns={
-        'feature_name': 'name',
-        'feature_class': 'class',
-        'state_name': 'state',
-        'county_name': 'county',
-        'prim_lat_dec': 'latitude',
-        'prim_long_dec': 'longitude'
-    })
-    
-    merged['desc_history'] = merged.apply(
-        lambda row: f"{row['description']} {row['history']}".strip(),
-        axis=1
+
+    merged["desc_history"] = merged.apply(
+        lambda row: f"{row['description']} {row['history']}".strip(), axis=1
     )
-    
-    merged = merged.drop(columns=['description', 'history'])
-    
+
+    merged = merged.drop(columns=["description", "history"])
+
     if add_elevation:
         if max_elevation_requests is not None:
             records_to_process = min(len(merged), max_elevation_requests)
         else:
             records_to_process = len(merged)
-        
-        merged['elevation_ft'] = None
-        
+
+        merged["elevation_ft"] = None
+
         for idx in range(records_to_process):
             row = merged.iloc[idx]
             try:
                 elevation = get_elevation(
-                    latitude=row['latitude'],
-                    longitude=row['longitude'],
-                    units='Feet'
+                    latitude=row["latitude"], longitude=row["longitude"], units="Feet"
                 )
-                merged.at[merged.index[idx], 'elevation_ft'] = elevation
-                
+                merged.at[merged.index[idx], "elevation_ft"] = elevation
+
                 if idx < records_to_process - 1:
                     time.sleep(0.1)
-                    
+
             except GNISDataError:
-                merged.at[merged.index[idx], 'elevation_ft'] = None
-    
+                merged.at[merged.index[idx], "elevation_ft"] = None
+
     if output_file is not None:
-        merged.to_csv(output_file, sep='|', index=False)
-    
+        merged.to_csv(output_file, sep="|", index=False)
+
     if clear_cache_after:
         clear_cache(location=location, cache_dir=cache_dir)
-    
+
     return merged
 
 
 if __name__ == "__main__":
     """
     Example usage demonstrating basic and advanced features.
-    
+
     Usage:
         python gnisdata.py                    # Show help
         python gnisdata.py CO                 # Load Colorado data
         python gnisdata.py CO summit          # Create enriched export for summits
     """
-    import sys
-    
+
     if len(sys.argv) == 1:
         print("GNIS Data Package - Usage Examples:")
         print("\n1. Basic Usage - Load GeoDataFrame:")
@@ -594,56 +641,55 @@ if __name__ == "__main__":
         print("\nAvailable feature classes: summit, ridge, valley, stream, lake, etc.")
         print("Use 'National' or state codes (e.g., CO, CA, NY)")
         sys.exit(0)
-    
+
     location = sys.argv[1]
-    
+
     try:
         if len(sys.argv) > 2:
             # Advanced usage: enriched export
-            feature_classes = [fc.strip() for fc in sys.argv[2].split(',')]
-            
-            print(f"\n{'='*60}")
+            feature_classes = [fc.strip() for fc in sys.argv[2].split(",")]
+
+            print("\n" + "=" * 60)
             print(f"Creating enriched export for {location}")
             print(f"Feature classes: {', '.join(feature_classes)}")
-            print(f"{'='*60}\n")
-            
+            print("=" * 60 + "\n")
+
             df = create_enriched_export(
                 location=location,
                 feature_classes=feature_classes,
                 clear_cache_after=False,
                 add_elevation=False,  # Set to True to add elevation (slower)
-                output_file=None  # Set to filename to export
+                output_file=None,  # Set to filename to export
             )
-            
+
             print(f"\nCreated enriched dataset with {len(df)} features")
             print(f"\nColumns: {list(df.columns)}")
-            print(f"\nFirst 5 rows:")
+            print("\nFirst 5 rows:")
             print(df.head())
-            print(f"\nFeature class distribution:")
-            print(df['class'].value_counts())
-            
+            print("\nFeature class distribution:")
+            print(df["class"].value_counts())
+
         else:
             # Basic usage: load GeoDataFrame
-            print(f"\n{'='*60}")
+            print("\n" + "=" * 60)
             print(f"Loading GNIS data for {location}")
-            print(f"{'='*60}\n")
-            
+            print("=" * 60 + "\n")
+
             gdf = load_gnis_gdf(location, use_cache=True)
-            
+
             print(f"\nLoaded {len(gdf)} features")
             print(f"\nColumns: {list(gdf.columns)}")
-            print(f"\nFirst 5 rows:")
+            print("\nFirst 5 rows:")
             print(gdf.head())
             print(f"\nGeometry type: {gdf.geom_type.unique()}")
-            
-            if 'feature_class' in gdf.columns:
-                print(f"\nTop 10 feature classes:")
-                print(gdf['feature_class'].value_counts().head(10))
-        
+
+            if "feature_class" in gdf.columns:
+                print("\nTop 10 feature classes:")
+                print(gdf["feature_class"].value_counts().head(10))
+
     except GNISDataError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
     except KeyboardInterrupt:
         print("\n\nOperation cancelled by user.")
         sys.exit(1)
-
