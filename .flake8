@@ -1,0 +1,13 @@
+[flake8]
+max-line-length = 88
+extend-ignore = E203, W503, F841
+exclude =
+    .git,
+    __pycache__,
+    .pytest_cache,
+    .venv,
+    venv,
+    dist,
+    build
+per-file-ignores =
+    tests/*:F841

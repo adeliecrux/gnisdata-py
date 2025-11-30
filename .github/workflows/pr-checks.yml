@@ -1,0 +1,176 @@
+name: Pull Request Checks
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**.py'
+      - 'pyproject.toml'
+      - 'poetry.lock'
+      - 'tests/**'
+      - '.github/workflows/**'
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: latest
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+      
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
+      
+      - name: Install dependencies
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: poetry install --no-interaction --no-root
+      
+      - name: Install project
+        run: poetry install --no-interaction
+      
+      - name: Run pytest with coverage
+        run: |
+          poetry run pytest --cov=gnisdata --cov-report=xml --cov-report=term-missing
+  
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: latest
+      
+      - name: Install dependencies
+        run: |
+          poetry install --no-interaction
+          poetry add --group dev black flake8 isort --no-interaction
+      
+      - name: Run Black formatter check
+        run: |
+          echo "Checking code formatting with Black..."
+          poetry run black --check --diff .
+      
+      - name: Run isort import check
+        run: |
+          echo "Checking import sorting..."
+          poetry run isort --check-only --diff .
+      
+      - name: Run Flake8 linter
+        run: |
+          echo "Running Flake8 linter..."
+          poetry run flake8 gnisdata.py tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          poetry run flake8 gnisdata.py tests/ --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
+  
+  validate:
+    name: Validate Package
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+      
+      - name: Validate project structure
+        run: |
+          echo "Checking project structure..."
+          python -c "
+          import os
+          required = ['pyproject.toml', 'poetry.lock', 'gnisdata.py', 'tests/test_gnisdata.py', 'LICENSE', 'README.md']
+          missing = [f for f in required if not os.path.exists(f)]
+          if missing:
+              print(f'❌ Missing files: {missing}')
+              exit(1)
+          print('✅ All required files present')
+          "
+      
+      - name: Validate Poetry configuration
+        run: |
+          poetry check
+      
+      - name: Test package build
+        run: |
+          poetry build
+          echo "✅ Package builds successfully"
+      
+      - name: Test package installation
+        run: |
+          pip install dist/*.whl
+          python -c "import gnisdata; print('✅ Package imports successfully')"
+      
+      - name: Check for secrets in code
+        run: |
+          echo "Scanning for potential secrets..."
+          if grep -rE "(SECRET_KEY|API_KEY|PASSWORD)\s*=\s*['\"][^'\"]+['\"]" --include="*.py" gnisdata.py tests/; then
+            echo "⚠️ WARNING: Possible hardcoded secret found"
+            exit 1
+          fi
+          echo "✅ No hardcoded secrets detected"
+  
+  summary:
+    name: PR Summary
+    runs-on: ubuntu-latest
+    needs: [test, lint, validate]
+    if: always()
+    
+    steps:
+      - name: Check job results
+        run: |
+          echo "================================"
+          echo "Pull Request Check Summary"
+          echo "================================"
+          echo "PR #${{ github.event.pull_request.number }}"
+          echo "Branch: ${{ github.head_ref }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "================================"
+          
+          if [[ "${{ needs.test.result }}" == "success" ]] && \
+             [[ "${{ needs.lint.result }}" == "success" ]] && \
+             [[ "${{ needs.validate.result }}" == "success" ]]; then
+            echo "✅ All checks passed!"
+            echo ""
+            echo "Safe to merge when ready."
+          else
+            echo "❌ Some checks failed:"
+            echo "  Tests: ${{ needs.test.result }}"
+            echo "  Lint: ${{ needs.lint.result }}"
+            echo "  Validate: ${{ needs.validate.result }}"
+            exit 1
+          fi
+  
